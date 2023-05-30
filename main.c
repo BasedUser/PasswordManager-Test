@@ -1,23 +1,9 @@
 #include "enc.c"
 #include <stdio.h>
 #include <stdlib.h>
-#include <unistd.h>
 
 #define false 0
 #define true 1
-
-#define MAXENTRIES 4096
-
-typedef struct {
-  char* name;
-  char* user;
-  char* pass;
-  char* desc;
-} PMEntry;
-
-PMEntry columnNames = {"Name", "Username", "Password", "Description"};
-PMEntry **entries;
-uint32_t entryCount = 0;
 
 #ifdef USEGTK
 #include <gtk/gtk.h>
@@ -204,163 +190,19 @@ static void activate(GtkApplication *app, gpointer user_data) {
 
   gtk_widget_show(window);
 
-} */
-
-#else
-
-// !!TODO WARN!! try to use something different from gets ASAP
-#define gets(X) gets((X))
-//#define gets(X) gets_s((X), 20)
-
-#define printd //printf
-
-void* key;
-uint32_t keylen = 0;
-
-void get_entries() {
-  FILE *fkey, *db;
-  fkey = fopen("key.bin","rb");
-  db = fopen("passdb.bin","rb");
-  if (fkey == NULL) {
-    printf("This program has been started for the first time,\n"
-           "or the key used for the database could not be read.\n");
-    while(keylen < 8 || keylen > 2048) {
-      printf("Enter new key length: ");
-      //printf("(%d) ",keylen); 
-      scanf("%d", &keylen);
-      printd("DEBUG: scanf\n");
-      if(keylen < 8 || keylen > 2048) {
-        printf("Invalid key length %d, must be within [8, 2048]\n", keylen);
-      }
-    }
-    printd("DEBUG: got key length\n");
-    int randfd = open("/dev/random", 0); // yes, this isn't portable
-    key = malloc(keylen);
-    int rres = read(randfd, key, keylen);          // too bad!
-    printd("DEBUG: read %d bytes from /dev/random with fd %d\n", rres, randfd);
-    close(randfd);
-
-    FILE *fkeyw = fopen("key.bin","wb");
-    printd("DEBUG: opening key file\n");
-    fwrite(&keylen, sizeof(uint32_t), 1, fkeyw);
-    printd("DEBUG: writing key\n");
-    if(fwrite(key, keylen, 1, fkeyw) == 0) {
-      printf("WARN: could not write key to disk.\n");
-    }
-    printd("DEBUG: closing key file\n");
-    fclose(fkeyw);
-  } else {
-    printd("DEBUG: opening key file for read\n");
-    fread(&keylen, sizeof(uint32_t), 1, fkey);
-    key = malloc(keylen);
-    fread(key, keylen, 1, fkey);
-    fclose(fkey);
-  }
-  printd("DEBUG: key read\n");
-  entries = (PMEntry**) calloc(MAXENTRIES,sizeof(PMEntry));
-  entries[0] = &columnNames;
-
-  aes_init_w(key, keylen);
-  if (db == NULL) {
-    printf("WARN: Could not open database file.\n");
-  } else {
-    fread(&entryCount, sizeof(uint32_t), 1, db);
-    int bufl;
-    for(int i=1; i<entryCount+1; i++){
-      PMEntry *entry = malloc(sizeof(PMEntry));
-      int j = 0;
-      while(j < 4) {
-        fread(&bufl, sizeof(uint32_t), 1, db);
-        void *tbuf = malloc(bufl);
-        fread(tbuf, bufl, 1, db);
-        switch(j) {
-          case 0:
-            entry->name = (char*)tbuf;
-          break;
-          case 1:
-            entry->user = dec_buf(tbuf, &bufl);
-          break;
-          case 2:
-            entry->pass = dec_buf(tbuf, &bufl);
-          break;
-          case 3:
-            entry->desc = (char*)tbuf;
-          break;
-        }
-        j++;
-      }
-      entries[i] = entry;
-    }
-    fclose(db);
-  }
-  printd("DEBUG: end get_entries\n");
-}
-
-void sync_entries() {
-  FILE *db;
-  if ((db = fopen("passdb.bin","wb")) == NULL) {
-    printf("Could not write to database, unable to open file.");
-    return;
-  }
-  printd("DEBUG: writing entryCount = %d\n", entryCount);
-  printd("DEBUG: fwrite(%d, %d, %d, %d);\n", &entryCount, sizeof(uint32_t), 1, db);
-  fwrite(&entryCount, sizeof(uint32_t), 1, db);
-  for(int i=1; i<entryCount+1; i++){
-    PMEntry *entry = entries[i];
-    printd("DEBUG: attempting to write entry %d\n", i);
-    int j = 0;
-    while(j < 4) {
-      void *tbuf;
-      int bufl;
-      switch(j) {
-        case 0:
-          bufl = strlen(entry->name);
-          tbuf = entry->name;
-        break;
-        case 1:
-          bufl = strlen(entry->user);
-          tbuf = enc_buf(entry->user, &bufl);
-        break;
-        case 2:
-          bufl = strlen(entry->pass);
-          tbuf = enc_buf(entry->pass, &bufl);
-        break;
-        case 3:
-          bufl = strlen(entry->desc);
-          tbuf = entry->desc;
-        break;
-      }
-      printd("DEBUG: attempting to write subentry %d of entry %d\n", j, i);
-      fwrite(&bufl, sizeof(uint32_t), 1, db);
-      printd("DEBUG: attempting to write subentry %d of entry %d\n", j, i);
-      fwrite(tbuf, bufl, 1, db);
-      j++;
-    }
-  }
-}
-
-int add_entry(PMEntry* entry) {
-  if (entryCount+1 == MAXENTRIES) {
-    printf("Could not add new entry - out of allocated memory.");
-    return 1;
-  }
-  entries[entryCount+1] = entry;
-  ++entryCount;
-  sync_entries();
-  return 0;
-}
-
-int remove_entry(int id) {
-  PMEntry* temp = entries[entryCount];
-  PMEntry* removed = entries[id+1];
-  //free(removed);
-  entries[id+1] = temp;
-  --entryCount;
-  sync_entries();
-  return 0;
 }
 
 #endif
+
+void print_help() {
+  printf("Commands:\n"
+         "h - Show this list of commands.\n"
+         "l - List all registered entries. (ID, name, desc)\n"
+         "p - Print a database entry completely (name, user, pass, desc).\n"
+         "a - Add a user/pass entry to the database.\n"
+         "d - Delete a given entry by ID.\n"
+         "q - Quit this program.\n");
+}
 
 int main(int argc, char **argv) {
 #ifdef USEGTK
@@ -375,7 +217,67 @@ int main(int argc, char **argv) {
   return status;
 #else
   get_entries();
-
+  print_help();
+  PMEntry *entry;
+  while(true) {
+    char c = getchar();
+    int doQuit = false;
+    switch (c) {
+      case 'h':
+        print_help();
+      break;
+      case 'q':
+        doQuit = true;
+      break;
+      case 'l':
+        printf("List of entries:\n");
+        for(int i=0; i < entryCount; i++) {
+          printf("#%d: %s | %s\n", i, entries[i+1]->name, entries[i+1]->desc);
+        }
+      break;
+      case 'a':
+        entry = malloc(sizeof(PMEntry));
+        printf("Adding a new database entry with ID #%d.\n", entryCount);
+        char *name = malloc(128);
+        char *user = malloc(128);
+        char *pass = malloc(128);
+        char *desc = malloc(256);
+        printf("Entry name: "); scanf("%s", name);
+        printf("User name: "); scanf("%s", user);
+        printf("Password: "); scanf("%s", pass);
+        printf("Description (public): "); scanf("%s", desc);
+        entry->name = name;
+        entry->user = user;
+        entry->pass = pass;
+        entry->desc = desc;
+        if(add_entry(entry) == 0)
+          printf("Successfully added entry #%d with name %s.\n", entryCount-1, name);
+      break;
+      case 'p':
+        printf("ID (-1 to cancel): ");
+        int id = -1;
+        scanf("%d", &id);
+        if(id < 0 || id >= entryCount) {
+          printf("Abort.\n");
+          break;
+        }
+        entry = entries[id+1];
+        printf("Entry #%d | %s\nDescription: %s\nUsername: %s\nPassword: %s\n", id, entry->name, entry->desc, entry->user, entry->pass);
+      break;
+      case 'd':
+        printf("ID (-1 to cancel): ");
+        id = -1;
+        scanf("%d", &id);
+        if(id < 0 || id >= entryCount) {
+          printf("Abort.\n");
+          break;
+        }
+        remove_entry(id);
+      break;
+    }
+    if(doQuit)
+      break;
+  }
   sync_entries(); // just in case
 #endif
 }
