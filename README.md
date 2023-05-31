@@ -1,12 +1,11 @@
 # PasswordManager-Test
-The unsecure password manager from hell. Roughly a week of work wasted/spent on the GTK frontend, and the text end was written in 4 hours.
-Employs a custom binary database.
+The unsecure GTK password manager from hell. Employs a custom binary database and amateur frontend work.
 
-NOTE: GTK was too confusing to work with, expect absolutely nothing from the GUI frontend. Works by default with CLI.
-
-# Building
-Run `./make.sh`. Currently works only under Linux.
-For the GTK frontend, define USEGTK.
+This project also contains a legacy C implementation under the `c_impl/` folder.
 
 # Dependencies
-This program depends on openssl and gtk4. These can be installed manually or using your package manager of choice.
+This program depends on GTK4, PyGObject and cryptography. These can be installed with:
+```
+sudo pacman -S gtk4 # use your favorite package manager here
+pip install PyGObject cryptography
+```
