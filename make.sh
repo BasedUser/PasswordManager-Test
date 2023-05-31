@@ -1,1 +1,0 @@
-gcc -g -lcrypto -std=c11 $( pkg-config --cflags gtk4 ) -o main main.c $( pkg-config --libs gtk4 )
